@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
     if os.path.exists(pitched_file):
         with open(pitched_file, "r", encoding="utf-8") as f:
-            pitched = set(json.load(f))
+            pitched = {e.strip().lower() for e in json.load(f)}
     else:
         pitched = set()
 
@@ -162,8 +162,10 @@ if __name__ == "__main__":
     processed = 0
 
     for lead in email_leads:
+        email = lead.get("email", "").strip().lower()
 
-        if lead["email"] in pitched:
+        # Prevent duplicate sends to the same email address
+        if not email or email in pitched:
             continue
 
         if processed >= MAX_EMAILS_PER_RUN:
@@ -173,7 +175,7 @@ if __name__ == "__main__":
 
         print("\n" + "=" * 60)
         print(f"BUSINESS: {lead.get('name')}")
-        print(f"EMAIL:   {lead['email']}")
+        print(f"EMAIL:   {email}")
         print(f"SUBJECT: {subject}")
         print("-" * 60)
         print(body)
@@ -185,20 +187,19 @@ if __name__ == "__main__":
             continue
 
         if send_pitch(lead):
-            pitched.add(lead["email"])
+            pitched.add(email)
             sent += 1
+            # Save pitched email immediately so it's never emailed again even if interrupted
+            with open(pitched_file, "w", encoding="utf-8") as f:
+                json.dump(list(pitched), f, indent=2)
         else:
             failed += 1
 
         processed += 1
         time.sleep(3)
 
-    if not PREVIEW_ONLY:
-        with open(pitched_file, "w", encoding="utf-8") as f:
-            json.dump(list(pitched), f, indent=2)
-
     print(
         f"\n✅ Sent: {sent} | "
         f"❌ Failed: {failed} | "
         f"📊 Total Pitched: {len(pitched)}"
-    )
+    )
