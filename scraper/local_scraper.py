@@ -199,7 +199,38 @@ def extract_lead_from_panel(page, context, city: str, enrich_emails: bool = True
     }
 
 
+def save_lead_to_json(lead: dict, filename: str = DEFAULT_LEADS_FILE):
+    """Immediately append/merge a single scraped lead into the JSON file."""
+    name = lead.get("name", "").strip()
+    if not name or is_invalid_business_name(name):
+        return
+
+    existing = []
+    if os.path.exists(filename):
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        except Exception:
+            existing = []
+
+    lead_map = {item.get("name", ""): item for item in existing if item.get("name")}
+    if name not in lead_map:
+        lead_map[name] = lead
+    else:
+        # Keep lead updated (prefer new email if discovered)
+        if lead.get("email") and not lead_map[name].get("email"):
+            lead_map[name]["email"] = lead["email"]
+        for k, v in lead.items():
+            if v and not lead_map[name].get(k):
+                lead_map[name][k] = v
+
+    merged = list(lead_map.values())
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(merged, f, indent=2, ensure_ascii=False)
+
+
 def scrape_leads(query: str, city: str, max_results: int = 20) -> list:
+
     """Scrape Google Maps locally using Playwright."""
     leads = []
     search_query = f"{query} in {city}"
@@ -243,6 +274,7 @@ def scrape_leads(query: str, city: str, max_results: int = 20) -> list:
                 single_lead = extract_lead_from_panel(page, context, city, ENRICH_EMAILS)
                 if single_lead["name"]:
                     leads.append(single_lead)
+                    save_lead_to_json(single_lead, DEFAULT_LEADS_FILE)
                 return leads
 
             feed = page.locator('div[role="feed"]').first
@@ -289,15 +321,18 @@ def scrape_leads(query: str, city: str, max_results: int = 20) -> list:
                             lead["name"] = actual_name
                             seen_names.add(actual_name)
                             leads.append(lead)
+                            # Instant auto-save to disk:
+                            save_lead_to_json(lead, DEFAULT_LEADS_FILE)
                             print(
                                 f"   [{len(leads)}/{max_results}] {actual_name} | "
                                 f"Tel: {lead['phone'] or 'N/A'} | "
-                                f"Email: {lead['email'] or 'N/A'}",
+                                f"Email: {lead['email'] or 'N/A'} (Saved)",
                                 flush=True
                             )
+                    except KeyboardInterrupt:
+                        raise
                     except Exception:
                         continue
-
 
                 # Check if reached end of list
                 end_marker = page.locator("text=You've reached the end of the list").first
@@ -310,9 +345,13 @@ def scrape_leads(query: str, city: str, max_results: int = 20) -> list:
                 page.wait_for_timeout(1500)
                 scroll_attempts += 1
 
+        except KeyboardInterrupt:
+            print("\n   [Search interrupted by user] Preserving all scraped leads...", flush=True)
+            raise
         finally:
             context.close()
             browser.close()
+
 
 
     return leads
@@ -349,23 +388,21 @@ def save_to_json(leads: list, filename: str = DEFAULT_LEADS_FILE):
 
 
 if __name__ == "__main__":
-    all_leads = []
-    for query in SEARCH_QUERIES:
-        for city in TARGET_CITIES:
-            print(f"\n Searching: '{query}' in '{city}'")
-            leads = scrape_leads(query, city, max_results=MAX_RESULTS)
-            print(f" Found: {len(leads)} leads for {query} in {city}")
-            all_leads.extend(leads)
+    try:
+        all_leads = []
+        for query in SEARCH_QUERIES:
+            for city in TARGET_CITIES:
+                print(f"\n Searching: '{query}' in '{city}'", flush=True)
+                leads = scrape_leads(query, city, max_results=MAX_RESULTS)
+                print(f" Found: {len(leads)} leads for {query} in {city}", flush=True)
+                all_leads.extend(leads)
 
-    # Deduplicate current run
-    seen = set()
-    unique = []
-    for lead in all_leads:
-        name = lead.get("name")
-        if name and name not in seen:
-            seen.add(name)
-            unique.append(lead)
+        print(f"\n All searches complete! Total leads in this run: {len(all_leads)}", flush=True)
+        print(f" All leads are stored safely in: {DEFAULT_LEADS_FILE}", flush=True)
 
-    print(f"\n Total scraped in this run: {len(unique)}")
-    save_to_json(unique, DEFAULT_LEADS_FILE)
+    except KeyboardInterrupt:
+        print("\n\n⚠️ Process stopped by user (Ctrl+C).", flush=True)
+        print(f"✅ Don't worry! Every lead scraped up to this point has already been automatically saved to {DEFAULT_LEADS_FILE}.\n", flush=True)
+        sys.exit(0)
+
 
