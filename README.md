@@ -9,9 +9,9 @@ LeadPipeline is a complete outbound sales system that runs **100% locally on you
 - 💬 **Monitors Inbound Replies** and delivery bounces via IMAP.
 - 📊 **Syncs to Google Sheets CRM** (optional, zero database required).
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square&labelColor=03050a)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-22d3ee?style=flat-square&labelColor=03050a)](https://www.python.org/)
 [![Built for](https://img.shields.io/badge/Cost-%240%20Forever-success?style=flat-square&labelColor=03050a)]()
+
 
 ---
 
@@ -25,7 +25,7 @@ Open your terminal (PowerShell on Windows, or bash/zsh on macOS/Linux):
 
 ```bash
 # Clone repository
-git clone 
+git clone https://github.com/HazimBhatt/Lead-pipeline.git
 cd lead-pipeline
 ```
 
@@ -236,9 +236,3 @@ All sensitive credentials and data are pre-configured in `.gitignore`:
 - `credentials.json` (service account keys)
 
 These files will **never** be committed or leaked to your Git repository.
-
----
-
-## License
-
-MIT — Free to use, modify, and build upon.
