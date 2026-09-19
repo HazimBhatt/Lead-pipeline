@@ -1,9 +1,4 @@
-# Scraper Configuration
-# Copy this file to config.py and fill in your values
 
-# Your Apify API key (free tier: $5/month)
-# Get it from: https://console.apify.com/account/integrations
-APIFY_API_KEY = "apify_api_YOUR_KEY_HERE"
 
 # What businesses to search for
 SEARCH_QUERIES = [
@@ -23,3 +18,14 @@ TARGET_CITIES = [
 
 # Max results per search
 MAX_RESULTS = 20
+
+# Local Browser Settings (Playwright)
+# Set HEADLESS = False to watch the browser open and scrape on your screen
+HEADLESS = False
+
+# Email Enrichment Settings
+# Automatically visits business websites to discover direct contact emails
+ENRICH_EMAILS = True
+EMAIL_TIMEOUT = 6
+MAX_EMAIL_PAGES = 3
+

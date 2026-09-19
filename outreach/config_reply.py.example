@@ -1,5 +1,5 @@
 # Reply Checker Configuration
-IMAP_HOST = "imap.hostinger.com"      # or imap.gmail.com
+IMAP_HOST = "imap.gmail.com"      
 IMAP_USER = "hello@yourdomain.com"
 IMAP_PASSWORD = "YOUR_EMAIL_PASSWORD"
 CHECK_DAYS = 3  # Check emails from last N days

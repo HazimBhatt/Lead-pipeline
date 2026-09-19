@@ -4,9 +4,15 @@ import imaplib
 import email
 from email.header import decode_header
 from datetime import datetime, timedelta
-import json
+import os
 import sys
+
+OUTREACH_DIR = os.path.dirname(os.path.abspath(__file__))
+if OUTREACH_DIR not in sys.path:
+    sys.path.insert(0, OUTREACH_DIR)
+
 from config import IMAP_HOST, IMAP_USER, IMAP_PASSWORD, CHECK_DAYS
+
 
 def connect():
     """Connect to IMAP inbox."""
