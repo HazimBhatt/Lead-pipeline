@@ -34,12 +34,29 @@ from email_extractor import find_lead_email, extract_emails_from_html
 DEFAULT_LEADS_FILE = os.path.join(ROOT_DIR, "leads.json")
 
 
+def clean_business_name(name: str) -> str:
+    """Strip material icons, private-use characters, and collapse extra whitespace."""
+    if not name:
+        return ""
+    # Strip unicode private use area (e.g. Google Material Icons like \ue5d4)
+    cleaned = re.sub(r"[\u2000-\u206f\ue000-\uf8ff]+", " ", name)
+    return " ".join(cleaned.split()).strip()
+
+
 def is_invalid_business_name(name: str) -> bool:
-    """Filter out Google Maps search headers mistakenly read as place names."""
+    """Filter out Google Maps search headers and ads mistakenly read as place names."""
     if not name:
         return True
-    nl = name.strip().lower()
-    return nl == "results" or nl.startswith("results for") or nl == "search results"
+    clean = clean_business_name(name).lower()
+    if not clean or len(clean) < 2:
+        return True
+    if clean in ("results", "search results", "sponsored", "ad", "ads", "advertisement"):
+        return True
+    if clean.startswith("results for") or clean.startswith("search results"):
+        return True
+    if clean.startswith("sponsored") or clean.startswith("ad ·") or clean.startswith("ads ·"):
+        return True
+    return False
 
 
 
@@ -66,27 +83,52 @@ def handle_consent_dialog(page):
             pass
 
 
-def extract_lead_from_panel(page, context, city: str, enrich_emails: bool = True) -> dict:
+def extract_lead_from_panel(page, context, city: str, expected_name: str = "", enrich_emails: bool = True) -> dict:
     """Extract lead details from the active Google Maps place panel."""
     # Wait for the place details panel elements to load
     try:
         page.wait_for_selector(
-            "button[data-item-id='address'], a[data-item-id='authority'], button[data-item-id*='phone'], div.TIH9bg",
-            timeout=6000
+            "button[data-item-id='address'], a[data-item-id='authority'], button[data-item-id*='phone'], div.TIH9bg, h1.DUwDvf",
+            timeout=5000
         )
     except Exception:
         pass
 
-    # 1. Name
+    # 1. Name - target the place header specifically to avoid ad headers
     name = ""
     try:
-        for h1 in page.locator("h1").all():
-            cand = h1.inner_text().strip()
-            if cand and not is_invalid_business_name(cand):
-                name = cand
-                break
+        title_selectors = [
+            "div[role='main'] h1.DUwDvf",
+            "h1.DUwDvf",
+            "div.lMbq3e h1",
+            "div[role='main'] h1",
+        ]
+        for sel in title_selectors:
+            title_el = page.locator(sel).first
+            if title_el.is_visible(timeout=800):
+                cand = clean_business_name(title_el.inner_text().strip())
+                if cand and not is_invalid_business_name(cand):
+                    name = cand
+                    break
     except Exception:
         pass
+
+    # Fallback to general h1s if specific title wasn't found
+    if not name:
+        try:
+            for h1 in page.locator("h1").all():
+                cand = clean_business_name(h1.inner_text().strip())
+                if cand and not is_invalid_business_name(cand):
+                    name = cand
+                    break
+        except Exception:
+            pass
+
+    # Fallback to the place card aria-label name from the feed
+    if not name and expected_name:
+        clean_exp = clean_business_name(expected_name)
+        if not is_invalid_business_name(clean_exp):
+            name = clean_exp
 
     # 2. Category
     category = ""
@@ -171,12 +213,13 @@ def extract_lead_from_panel(page, context, city: str, enrich_emails: bool = True
             pass
 
         # Step 8b: Scan website and search engine fallback
-        if not email and (website or name):
+        search_name = name or expected_name
+        if not email and (website or search_name):
             if website:
                 print(f"      Scanning website for email: {website[:55]}...", flush=True)
             email = find_lead_email(
                 website=website,
-                business_name=name,
+                business_name=search_name,
                 city=city,
                 timeout=EMAIL_TIMEOUT,
                 max_pages=MAX_EMAIL_PAGES,
@@ -201,10 +244,12 @@ def extract_lead_from_panel(page, context, city: str, enrich_emails: bool = True
 
 def save_lead_to_json(lead: dict, filename: str = DEFAULT_LEADS_FILE):
     """Immediately append/merge a single scraped lead into the JSON file."""
-    name = lead.get("name", "").strip()
+    name = clean_business_name(lead.get("name", ""))
+    lead["name"] = name
     if not name or is_invalid_business_name(name):
         return
 
+    city = (lead.get("city") or "").strip()
     existing = []
     if os.path.exists(filename):
         try:
@@ -213,16 +258,30 @@ def save_lead_to_json(lead: dict, filename: str = DEFAULT_LEADS_FILE):
         except Exception:
             existing = []
 
-    lead_map = {item.get("name", ""): item for item in existing if item.get("name")}
-    if name not in lead_map:
-        lead_map[name] = lead
+    # Clean and filter existing items (purge any legacy invalid / ad headers)
+    valid_existing = [
+        item for item in existing
+        if item.get("name") and not is_invalid_business_name(item.get("name"))
+    ]
+
+    lead_map = {}
+    for item in valid_existing:
+        item_name = clean_business_name(item.get("name", ""))
+        item_city = (item.get("city") or "").strip()
+        item["name"] = item_name
+        key = (item_name.lower(), item_city.lower())
+        lead_map[key] = item
+
+    current_key = (name.lower(), city.lower())
+    if current_key not in lead_map:
+        lead_map[current_key] = lead
     else:
         # Keep lead updated (prefer new email if discovered)
-        if lead.get("email") and not lead_map[name].get("email"):
-            lead_map[name]["email"] = lead["email"]
+        if lead.get("email") and not lead_map[current_key].get("email"):
+            lead_map[current_key]["email"] = lead["email"]
         for k, v in lead.items():
-            if v and not lead_map[name].get(k):
-                lead_map[name][k] = v
+            if v and not lead_map[current_key].get(k):
+                lead_map[current_key][k] = v
 
     merged = list(lead_map.values())
     with open(filename, "w", encoding="utf-8") as f:
@@ -316,9 +375,9 @@ def scrape_leads(query: str, city: str, max_results: int = 20) -> list:
 
             # Scroll and collect listings until max_results is reached
             print(f"   Collecting up to {max_results} results...", flush=True)
-            seen_names = set()
+            seen_keys = set()
             scroll_attempts = 0
-            max_scroll_attempts = 30
+            max_scroll_attempts = 35
 
             while len(leads) < max_results and scroll_attempts < max_scroll_attempts:
                 # Find all actual place links in the feed (skip headers/chips)
@@ -332,26 +391,33 @@ def scrape_leads(query: str, city: str, max_results: int = 20) -> list:
                     if len(leads) >= max_results:
                         break
 
-                    name_attr = (link.get_attribute("aria-label") or "").strip()
-                    if not name_attr or is_invalid_business_name(name_attr) or name_attr in seen_names:
+                    name_attr = clean_business_name((link.get_attribute("aria-label") or "").strip())
+                    if not name_attr or is_invalid_business_name(name_attr):
+                        continue
+
+                    link_key = (name_attr.lower(), city.lower())
+                    if link_key in seen_keys:
                         continue
 
                     # Click to open place detail panel
                     try:
                         link.scroll_into_view_if_needed(timeout=2000)
                         link.click()
-                        page.wait_for_timeout(1000)  # Brief pause for details to render
+                        page.wait_for_timeout(1200)  # Brief pause for details to render
 
-                        lead = extract_lead_from_panel(page, context, city, ENRICH_EMAILS)
-                        actual_name = lead["name"] or name_attr
+                        lead = extract_lead_from_panel(page, context, city, expected_name=name_attr, enrich_emails=ENRICH_EMAILS)
+                        actual_name = clean_business_name(lead.get("name") or name_attr)
                         if is_invalid_business_name(actual_name):
                             actual_name = name_attr
                         if is_invalid_business_name(actual_name):
                             continue
 
-                        if actual_name and actual_name not in seen_names:
-                            lead["name"] = actual_name
-                            seen_names.add(actual_name)
+                        lead["name"] = actual_name
+                        actual_key = (actual_name.lower(), city.lower())
+
+                        if actual_key not in seen_keys:
+                            seen_keys.add(link_key)
+                            seen_keys.add(actual_key)
                             leads.append(lead)
                             # Instant auto-save to disk:
                             save_lead_to_json(lead, DEFAULT_LEADS_FILE)
@@ -363,7 +429,8 @@ def scrape_leads(query: str, city: str, max_results: int = 20) -> list:
                             )
                     except KeyboardInterrupt:
                         raise
-                    except Exception:
+                    except Exception as err:
+                        print(f"   [Notice: skipped '{name_attr}']: {err}", flush=True)
                         continue
 
                 # Check if reached end of list
@@ -381,8 +448,14 @@ def scrape_leads(query: str, city: str, max_results: int = 20) -> list:
             print("\n   [Search interrupted by user] Preserving all scraped leads...", flush=True)
             raise
         finally:
-            context.close()
-            browser.close()
+            try:
+                context.close()
+            except Exception:
+                pass
+            try:
+                browser.close()
+            except Exception:
+                pass
 
 
 
@@ -391,7 +464,6 @@ def scrape_leads(query: str, city: str, max_results: int = 20) -> list:
 
 def save_to_json(leads: list, filename: str = DEFAULT_LEADS_FILE):
     """Save leads to JSON file with UTF-8 encoding."""
-    # If leads file exists, load existing to merge/update
     existing = []
     if os.path.exists(filename):
         try:
@@ -400,18 +472,34 @@ def save_to_json(leads: list, filename: str = DEFAULT_LEADS_FILE):
         except Exception:
             existing = []
 
-    # Deduplicate by name, preferring new records with emails
-    lead_map = {item.get("name", ""): item for item in existing if item.get("name")}
+    valid_existing = [
+        item for item in existing
+        if item.get("name") and not is_invalid_business_name(item.get("name"))
+    ]
+
+    lead_map = {}
+    for item in valid_existing:
+        item_name = clean_business_name(item.get("name", ""))
+        item_city = (item.get("city") or "").strip()
+        item["name"] = item_name
+        key = (item_name.lower(), item_city.lower())
+        lead_map[key] = item
+
     for lead in leads:
-        name = lead.get("name", "")
-        if not name:
+        name = clean_business_name(lead.get("name", ""))
+        if not name or is_invalid_business_name(name):
             continue
-        if name not in lead_map:
-            lead_map[name] = lead
+        lead["name"] = name
+        city = (lead.get("city") or "").strip()
+        key = (name.lower(), city.lower())
+        if key not in lead_map:
+            lead_map[key] = lead
         else:
-            # If new lead has an email and existing doesn't, update it
-            if lead.get("email") and not lead_map[name].get("email"):
-                lead_map[name]["email"] = lead["email"]
+            if lead.get("email") and not lead_map[key].get("email"):
+                lead_map[key]["email"] = lead["email"]
+            for k, v in lead.items():
+                if v and not lead_map[key].get(k):
+                    lead_map[key][k] = v
 
     merged = list(lead_map.values())
     with open(filename, "w", encoding="utf-8") as f:
