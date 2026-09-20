@@ -14,5 +14,9 @@ FROM_NAME = "Your Name"
 # BCC: Track all sent emails by CC'ing yourself
 BCC = "hello@yourdomain.com"
 
-# Rate limiting (seconds between sends)
-SEND_DELAY = 3
+# Rate limiting (seconds between consecutive sends)
+SEND_DELAY = 30
+
+# Optional run cap (uncomment to limit emails per run; leave commented to process all uncontacted leads)
+# MAX_EMAILS_PER_RUN = 50
+

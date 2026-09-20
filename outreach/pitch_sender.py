@@ -14,25 +14,42 @@ if sys.platform == "win32":
         pass
 
 
-from config import (
-    SMTP_HOST,
-    SMTP_PORT,
-    SMTP_USER,
-    SMTP_PASSWORD,
-    FROM_EMAIL,
-    FROM_NAME,
-    BCC,
-)
+OUTREACH_DIR = os.path.dirname(os.path.abspath(__file__))
+if OUTREACH_DIR not in sys.path:
+    sys.path.insert(0, OUTREACH_DIR)
 
-# IMPORTANT: Keep True while testing
-PREVIEW_ONLY = False
+import config
 
-# Maximum emails per run
-MAX_EMAILS_PER_RUN = 5
+SMTP_HOST = config.SMTP_HOST
+SMTP_PORT = config.SMTP_PORT
+SMTP_USER = config.SMTP_USER
+SMTP_PASSWORD = config.SMTP_PASSWORD
+FROM_EMAIL = config.FROM_EMAIL
+FROM_NAME = config.FROM_NAME
+BCC = getattr(config, "BCC", "")
 
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Rate limiting (seconds between consecutive sends) - Defaults to 30s
+SEND_DELAY = getattr(config, "SEND_DELAY", 30)
+
+# Optional cap per run (None or 0 = runs continuously until all leads are contacted)
+MAX_EMAILS_PER_RUN = getattr(config, "MAX_EMAILS_PER_RUN", None)
+
+# IMPORTANT: Set to True for testing without sending real emails
+PREVIEW_ONLY = getattr(config, "PREVIEW_ONLY", False)
+
+ROOT_DIR = os.path.dirname(OUTREACH_DIR)
 LEADS_FILE = os.path.join(ROOT_DIR, "leads.json")
 PITCHED_FILE = os.path.join(ROOT_DIR, "pitched.json")
+
+
+def wait_between_emails(seconds: int = 30):
+    """Wait with a responsive live countdown between email sends (press Ctrl+C to stop)."""
+    if seconds <= 0:
+        return
+    for remaining in range(seconds, 0, -1):
+        print(f"\r⏳ Waiting {remaining:2d}s before next email (press Ctrl+C to stop)...", end="", flush=True)
+        time.sleep(1)
+    print("\r" + " " * 65 + "\r", end="", flush=True)
 
 
 def load_leads(filename: str = LEADS_FILE) -> list:
@@ -136,70 +153,96 @@ if __name__ == "__main__":
 
     email_leads = [
         lead for lead in leads
-        if lead.get("email")
+        if lead.get("email") and lead.get("email").strip()
     ]
-
-    print(
-        f"📧 Leads with email: "
-        f"{len(email_leads)}/{len(leads)}"
-    )
-
-    if not email_leads:
-        print("⚠️ No leads with email found.")
-        sys.exit(1)
 
     pitched_file = PITCHED_FILE
 
-
     if os.path.exists(pitched_file):
-        with open(pitched_file, "r", encoding="utf-8") as f:
-            pitched = {e.strip().lower() for e in json.load(f)}
+        try:
+            with open(pitched_file, "r", encoding="utf-8") as f:
+                pitched = {e.strip().lower() for e in json.load(f) if isinstance(e, str) and e.strip()}
+        except Exception:
+            pitched = set()
     else:
         pitched = set()
 
-    sent = 0
-    failed = 0
-    processed = 0
+    # Filter uncontacted leads & deduplicate within this run
+    uncontacted_leads = []
+    seen_in_this_run = set()
 
     for lead in email_leads:
         email = lead.get("email", "").strip().lower()
-
-        # Prevent duplicate sends to the same email address
-        if not email or email in pitched:
+        if not email or email in pitched or email in seen_in_this_run:
             continue
+        seen_in_this_run.add(email)
+        uncontacted_leads.append(lead)
 
-        if processed >= MAX_EMAILS_PER_RUN:
-            break
+    total_pending = len(uncontacted_leads)
 
-        subject, body = generate_pitch(lead)
+    print("=" * 60)
+    print(f"📧 Total leads in database:   {len(leads)}")
+    print(f"📬 Already pitched:          {len(pitched)}")
+    print(f"🎯 Ready to pitch:           {total_pending} uncontacted leads")
+    print(f"⏱️ Delay between emails:     {SEND_DELAY} seconds")
+    print("=" * 60)
 
-        print("\n" + "=" * 60)
-        print(f"BUSINESS: {lead.get('name')}")
-        print(f"EMAIL:   {email}")
-        print(f"SUBJECT: {subject}")
-        print("-" * 60)
-        print(body)
-        print("=" * 60)
+    if total_pending == 0:
+        print("\n🎉 All leads with emails have already been contacted! No emails left to send.")
+        sys.exit(0)
 
-        if PREVIEW_ONLY:
-            print("👀 PREVIEW ONLY — email NOT sent.")
-            processed += 1
-            continue
+    total_to_process = total_pending
+    if MAX_EMAILS_PER_RUN and MAX_EMAILS_PER_RUN > 0:
+        total_to_process = min(total_pending, MAX_EMAILS_PER_RUN)
+        print(f"⚙️ Cap active: sending up to {total_to_process} emails this run.\n")
+    else:
+        print(f"🚀 Running continuously until all {total_to_process} uncontacted leads are emailed (or until Ctrl+C).\n")
 
-        if send_pitch(lead):
-            pitched.add(email)
-            sent += 1
-            # Save pitched email immediately so it's never emailed again even if interrupted
-            with open(pitched_file, "w", encoding="utf-8") as f:
-                json.dump(list(pitched), f, indent=2)
-        else:
-            failed += 1
+    sent = 0
+    failed = 0
 
-        processed += 1
-        time.sleep(3)
+    try:
+        for idx, lead in enumerate(uncontacted_leads[:total_to_process], start=1):
+            email = lead.get("email", "").strip().lower()
 
-    print(
-        f"\n✅ Sent: {sent} | "
-        f"❌ Failed: {failed} | "
-        f"📊 Total Pitched: {len(pitched)}"
-    )
+            subject, body = generate_pitch(lead)
+
+            print("\n" + "=" * 60)
+            print(f"[{idx}/{total_to_process}] BUSINESS: {lead.get('name')}")
+            print(f"EMAIL:   {email}")
+            print(f"SUBJECT: {subject}")
+            print("-" * 60)
+            print(body)
+            print("=" * 60)
+
+            if PREVIEW_ONLY:
+                print("👀 PREVIEW ONLY — email NOT sent.")
+            else:
+                if send_pitch(lead):
+                    pitched.add(email)
+                    sent += 1
+                    # Save pitched email immediately so it's never emailed again even if interrupted
+                    with open(pitched_file, "w", encoding="utf-8") as f:
+                        json.dump(sorted(list(pitched)), f, indent=2)
+                else:
+                    failed += 1
+
+            # Only delay if there are more emails left to send in this run
+            if idx < total_to_process:
+                wait_between_emails(SEND_DELAY)
+
+        print("\n🎉 All available leads have been contacted! Outreach completed.")
+
+    except KeyboardInterrupt:
+        print("\n\n⚠️ Process stopped by user (Ctrl+C).")
+        print(f"✅ Every email sent up to this point ({sent} sent) is already recorded in {pitched_file}.")
+        print("   You can run pitch_sender.py again anytime to pick up with the remaining leads.")
+
+    finally:
+        remaining_now = total_pending - (sent + failed)
+        print(
+            f"\n📊 Session Summary: Sent: {sent} | "
+            f"Failed: {failed} | "
+            f"Remaining uncontacted: {max(0, remaining_now)} | "
+            f"Total Pitched (all-time): {len(pitched)}"
+        )
