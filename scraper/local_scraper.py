@@ -229,21 +229,53 @@ def save_lead_to_json(lead: dict, filename: str = DEFAULT_LEADS_FILE):
         json.dump(merged, f, indent=2, ensure_ascii=False)
 
 
-def scrape_leads(query: str, city: str, max_results: int = 20) -> list:
+def launch_browser(p, headless: bool = False):
+    """
+    Launch local browser safely.
+    Prefers installed Google Chrome or Microsoft Edge to bypass Windows Application
+    Control (WDAC/AppLocker) policies that block downloaded AppData binaries.
+    """
+    launch_args = [
+        "--disable-blink-features=AutomationControlled",
+        "--start-maximized",
+    ]
 
+    # 1. Try real installed Google Chrome
+    try:
+        return p.chromium.launch(
+            channel="chrome",
+            headless=headless,
+            args=launch_args,
+        )
+    except Exception:
+        pass
+
+    # 2. Try real installed Microsoft Edge
+    try:
+        return p.chromium.launch(
+            channel="msedge",
+            headless=headless,
+            args=launch_args,
+        )
+    except Exception:
+        pass
+
+    # 3. Fallback to default Playwright Chromium
+    return p.chromium.launch(
+        headless=headless,
+        args=launch_args,
+    )
+
+
+def scrape_leads(query: str, city: str, max_results: int = 20) -> list:
     """Scrape Google Maps locally using Playwright."""
     leads = []
     search_query = f"{query} in {city}"
     search_url = f"https://www.google.com/maps/search/{urllib.parse.quote_plus(search_query)}"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=HEADLESS,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--start-maximized",
-            ],
-        )
+        browser = launch_browser(p, headless=HEADLESS)
+
 
         context = browser.new_context(
             viewport=None,

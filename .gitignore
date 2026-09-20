@@ -10,6 +10,7 @@ config.py
 config_reply.py
 
 # Python
+oldleads.json
 __pycache__/
 *.pyc
 .venv/
