@@ -43,6 +43,7 @@ for p in (ROOT_DIR, OUTREACH_DIR):
         sys.path.insert(0, p)
 
 import config
+from analyzer.demo_generator import save_replied_client_brief
 
 IMAP_HOST = getattr(config, "IMAP_HOST", "imap.gmail.com")
 IMAP_USER = getattr(config, "IMAP_USER", config.SMTP_USER)
@@ -267,6 +268,15 @@ def send_reply_alert(
 
     actions_text = "\n".join(f"  {i}. {act}" for i, act in enumerate(draft.next_actions, start=1))
 
+    client_brief_path = save_replied_client_brief(
+        lead=lead_record or {"name": biz_name, "email": sender_email},
+        reply_subject=reply_subject,
+        reply_body=reply_body,
+        closing_draft_summary=draft.summary,
+        closing_draft_body=draft.recommended_reply_body,
+    )
+    print(f"📁 Saved full client dossier & $0 redesign prompt -> {client_brief_path}", flush=True)
+
     alert_body = f"""=================================================================
 {emoji} INCOMING CLIENT REPLY ALERT — {biz_name}
 =================================================================
@@ -275,7 +285,8 @@ BUSINESS:       {biz_name}{f' ({city})' if city else ''}
 PROSPECT EMAIL: {sender_email}
 PHONE / WA:     {phone} | {wa_link}
 SCORE / EST:    {score}/10 | {deal_val}
-CUSTOM DEMO:    {demo_path}
+CLIENT DOSSIER: {client_brief_path}
+                (Contains ALL audit info + $0 copy-paste Redesign Mockup Prompt!)
 
 -----------------------------------------------------------------
 WHAT THEY SAID (Subject: {reply_subject}):

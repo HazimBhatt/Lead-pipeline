@@ -26,7 +26,6 @@ for p in (ROOT_DIR, OUTREACH_DIR, ANALYZER_DIR):
         sys.path.insert(0, p)
 
 from analyzer.site_auditor import audit_lead
-from analyzer.demo_generator import generate_whale_demo_html
 
 PORTFOLIO_FILE = os.path.join(ROOT_DIR, "portfolio.json")
 LEADS_FILE = os.path.join(ROOT_DIR, "leads.json")
@@ -34,15 +33,14 @@ QUALIFIED_FILE = os.path.join(ROOT_DIR, "qualified_leads.json")
 PITCHED_FILE = os.path.join(ROOT_DIR, "pitched.json")
 STATE_FILE = os.path.join(ROOT_DIR, "outreach_state.json")
 
-# Fallback model chain (starts with configured model, gracefully handles transient 503/504 demand spikes)
+# Ultra-cost-efficient fallback chain for bulk lead scoring & 50-word emails (deprecated 2.5-flash removed)
 MODEL_FALLBACK_CHAIN = [
-    "gemini-3.8-flash",
-    "gemini-4-hydrogen",
-    "gemini-3.7-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-2.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash",
+    "gemini-4-hydrogen",
 ]
 
 SPAM_TRIGGER_PHRASES = [
@@ -68,43 +66,19 @@ SPAM_TRIGGER_PHRASES = [
 ]
 
 
-class WhaleDemoCopy(BaseModel):
-    hero_eyebrow: str = Field(description="Short 3-5 word uppercase prestige eyebrow for their redesigned site")
-    hero_headline: str = Field(description="Punchy, conversion-focused headline tailored to their exact services")
-    hero_subheadline: str = Field(description="1-2 sentence value proposition citing their real rating/city")
-    primary_cta: str = Field(description="High-intent primary CTA button label (e.g. 'Book Implant Consultation')")
-    secondary_cta: str = Field(description="Low-friction secondary CTA button label")
-    three_quick_wins: List[str] = Field(description="3 concrete, high-ROI technical/conversion fixes specific to this business")
-
-
 class LeadQualificationResult(BaseModel):
-    score: int = Field(ge=1, le=10, description="Overall $2k-$10k+ client potential score (1=trash, 10=dream whale)")
-    tier: str = Field(description="Exactly one of: REJECT, QUALIFIED, WHALE")
-    estimated_deal_value: str = Field(description="Realistic project value range e.g. '$3,000 - $6,000'")
-    score_reasoning: str = Field(description="2 concise sentences explaining budget signals and fixable pain")
-    decision_maker_first_name: str = Field(
-        default="",
-        description="First name or 'Dr. LastName' ONLY if verified in audit text; otherwise empty string ''",
-    )
-    top_revenue_leaks: List[str] = Field(description="2-3 specific, verified leaks found in the live site audit")
-    recommended_service_angle: str = Field(description="Exact specialist positioning for this prospect (never generalist)")
-    matched_portfolio_project: str = Field(
-        description="Exact name of the single best matching project from sender_portfolio (portfolio.json)"
-    )
-    email_1_subject: str = Field(description="Short 2-5 word casual lowercase subject line (no punctuation spam)")
-    email_1_body: str = Field(
-        description="4-5 short plain-text sentences (<105 words), ZERO URLs/links, cites 1-2 real audit findings, mentions matched project name casually, ends with soft permission question"
-    )
-    followup_1_body: str = Field(
-        description="Day 3 short plain-text follow-up (<65 words), casual bump adding 1 extra verified audit observation"
-    )
-    followup_2_body: str = Field(
-        description="Day 7 polite low-pressure breakup plain-text email (<55 words)"
-    )
-    whale_demo_copy: Optional[WhaleDemoCopy] = Field(
-        default=None,
-        description="Populated ONLY when score >= 9 (WHALE tier); null otherwise",
-    )
+    score: int = Field(ge=1, le=10, description="High-ticket $2k-$10k+ client score (1=trash, 10=dream whale)")
+    tier: str = Field(description="REJECT, QUALIFIED, or WHALE")
+    estimated_deal_value: str = Field(description="e.g. '$3,000 - $7,000'")
+    score_reasoning: str = Field(description="1-2 concise sentences on budget & fixable pain")
+    decision_maker_first_name: str = Field(default="", description="Verified first name or 'Dr. LastName' only, else ''")
+    top_revenue_leaks: List[str] = Field(description="2-3 verified audit leaks")
+    recommended_service_angle: str = Field(description="Specific specialist angle (never generalist)")
+    matched_portfolio_project: str = Field(description="Exact project name from sender_portfolio")
+    email_1_subject: str = Field(description="2-5 word casual lowercase subject")
+    email_1_body: str = Field(description="45-65 word plain-text Email 1, ZERO URLs/domains, soft mockup permission hook")
+    followup_1_body: str = Field(description="Day 3 plain-text bump (<55 words) with 1 extra leak + matched project name")
+    followup_2_body: str = Field(description="Day 7 polite breakup (<40 words)")
 
 
 def _load_outreach_config():
@@ -211,7 +185,7 @@ class GeminiSniperEngine:
             api_key=self.api_key,
             http_options=types.HttpOptions(timeout=35_000),
         )
-        self.preferred_model = preferred_model or (getattr(cfg, "GEMINI_MODEL", "gemini-3.8-flash") if cfg else "gemini-3.8-flash")
+        self.preferred_model = preferred_model or (getattr(cfg, "GEMINI_MODEL", "gemini-3.5-flash-lite") if cfg else "gemini-3.5-flash-lite")
         self.demo_model = getattr(cfg, "DEMO_MODEL", "gemini-4-hydrogen") if cfg else "gemini-4-hydrogen"
         self.min_score = getattr(cfg, "MIN_LEAD_SCORE", 7) if cfg else 7
         self.whale_threshold = getattr(cfg, "WHALE_SCORE_THRESHOLD", 9) if cfg else 9
@@ -279,80 +253,58 @@ class GeminiSniperEngine:
         projects = self.portfolio.get("projects", [])
         sa = audit.get("site_audit", {})
 
-        system_instruction = f"""You are an elite B2B outbound strategist and conversion copywriter advising {builder_name} ({builder.get('role', 'Full-Stack Product & Growth Engineer')}).
+        # Compact 1-line portfolio summary (cuts ~400 input tokens per lead!)
+        compact_portfolio = [
+            f"{p.get('name')} ({p.get('traction', '')}): {p.get('one_liner', '')}"
+            for p in projects
+        ]
 
-Your ONLY mission: help {builder_first} land $2,000–$10,000+ high-ticket clients from Day 1 via plain-text Gmail outreach that lands in Primary Inbox and earns 15–25%+ reply rates.
+        system_instruction = f"""B2B outbound strategist for {builder_name} ({builder.get('role', 'Product & Growth Engineer')}).
+Goal: score Tier-1 leads (1-10) & write ultra-short plain-text Gmail Primary emails for $2k-$10k+ deals.
 
-STRICT SCORING RULES (1–10):
-- Score 9–10 (WHALE): High-LTV business (cosmetic/implant dental, medspa, luxury real estate, solar/roofing/remodeling, law firm, boutique hotel, B2B SaaS/agency) with strong revenue signals (4.2+ rating, 40+ reviews OR high-ticket city) AND clear, painful, verifiable website/SEO/booking/AI leaks from the audit.
-- Score 7–8 (QUALIFIED): Solid business with real budget potential and 1–2 concrete fixable leaks.
-- Score 1–6 (REJECT): Low-margin tiny cafes/diners, chains/franchises where HQ controls IT, unreachable broken leads with no signal, OR businesses whose site is already fast, modern, has instant online booking, Schema.org, and analytics.
+SCORING:
+- 9-10 (WHALE): High-LTV business + strong reviews/city + clear fixable site/booking/SEO leaks.
+- 7-8 (QUALIFIED): Solid budget + 1-2 real fixable leaks.
+- 1-6 (REJECT): Tiny low-margin businesses, chains, or already modern fast sites with booking + schema + analytics.
 
-STRICT EMAIL COPYWRITING RULES (NON-NEGOTIABLE — DESIGNED FOR 15-25% REPLIES):
-1. Sound like a sharp, calm human engineer sending a quick 1-on-1 note — NEVER like an agency, salesperson, or AI template.
-2. EMAIL 1 MUST BE ULTRA-SHORT: 3–4 crisp sentences (45–65 words total, STRICT MAX 75 words) separated by blank lines (`\n\n`).
-3. DO NOT dump {builder_first}'s resume or project pitch in Email 1! Busy $5k+ clinic/business owners delete long self-intro pitches. Save portfolio proof from `sender_portfolio` for FOLLOW-UP 1 (Day 3) or when they reply!
-4. EMAIL 1 MUST HAVE ZERO URLS AND ZERO DOMAIN NAMES (no https://, no www., no '.com'/'.xyz'/'.net').
-5. Email 1 Structure (Exact 3-Part Sniper Formula):
-   - Line 1 (Greeting): Verified `Hi Dr. [LastName],` or `Hi [FirstName],` or `Hi [Short Company Name] team,`
-   - Line 2 (Undeniable Real Observation): Cite 1–2 SPECIFIC VERIFIED FACTS from the live website audit (exact load time, SSL warning, missing instant online booking, missing H1/Schema, outdated copyright). Never invent facts not in the audit.
-   - Line 3 (Curiosity Permission Hook):
-     * For WHALE (9–10): "I put together a quick redesign mockup showing how this could look on mobile — want me to send it over?"
-     * For QUALIFIED (7–8): "I jotted down 3 quick fixes for this — worth sending over?"
-   - Sign off cleanly:
-     Best,
-     {builder_first}
-6. FOLLOW-UP 1 (Day 3, <60 words): Casual bump adding 1 extra verified audit observation + 1 crisp proof line referencing the matched project brand name from `sender_portfolio`.
-7. FOLLOW-UP 2 (Day 7, <45 words): Classy, zero-pressure breakup email.
-8. NEVER use spam buzzwords (guaranteed, 100% free, skyrocket, boost ROI, game-changer, hope this finds you well, act now, click here).
-9. Subject line: 2–5 words, casual lowercase, no exclamation marks (e.g., "quick question about [short company name]" or "mobile site on [short company name]").
-10. NEVER use brackets like [Name] or [Company].
-"""
+EMAIL RULES (STRICT):
+1. Email 1: 3-4 short sentences (45-65 words, max 75), blank line between paragraphs, ZERO URLs/domains, NO resume/project pitch in Email 1, NO spam words, NO [brackets].
+2. Email 1 format:
+   - Greeting: verified `Hi Dr. [Last],` or `Hi [First],` or `Hi [Short Company] team,`
+   - Observation: 1-2 verified audit facts (load time, SSL, missing booking/H1/schema). Never invent facts.
+   - Hook: "I put together a quick redesign mockup showing how this could look on mobile — want me to send it over?"
+   - Signoff: `Best,\n{builder_first}`
+3. Subject: 2-5 lowercase words, no exclamation marks.
+4. Follow-up 1 (Day 3, <55 words): casual bump + 1 extra leak + brief mention of matched project name from sender_portfolio.
+5. Follow-up 2 (Day 7, <40 words): polite zero-pressure breakup."""
 
         payload = {
             "prospect": {
                 "name": lead.get("name"),
                 "city": lead.get("city"),
-                "category": lead.get("category"),
                 "rating": lead.get("rating"),
                 "reviews": lead.get("reviews"),
-                "website": lead.get("website"),
-                "email": lead.get("email"),
-                "email_is_role_address": audit.get("mx", {}).get("is_role_address"),
+                "role_email": audit.get("mx", {}).get("is_role_address"),
             },
-            "live_website_audit": {
-                "reachable": sa.get("reachable"),
-                "social_only": sa.get("social_only"),
-                "load_time_sec": sa.get("load_time_sec"),
-                "uses_https": sa.get("uses_https"),
-                "ssl_valid": sa.get("ssl_valid"),
-                "tech_stack": sa.get("tech_stack"),
-                "has_mobile_viewport": sa.get("has_mobile_viewport"),
-                "has_online_booking": sa.get("has_online_booking"),
-                "has_lead_form": sa.get("has_lead_form"),
-                "has_chat_widget": sa.get("has_chat_widget"),
-                "has_schema_org": sa.get("has_schema_org"),
-                "has_analytics": sa.get("has_analytics"),
-                "copyright_year": sa.get("copyright_year"),
-                "title": sa.get("title"),
-                "h1_tags": sa.get("h1_tags"),
-                "decision_maker_name": sa.get("decision_maker_name"),
-                "decision_maker_role": sa.get("decision_maker_role"),
-                "detected_leaks": sa.get("detected_leaks"),
-                "homepage_snippet": (sa.get("homepage_snippet") or "")[:1800],
+            "audit": {
+                "ok": sa.get("reachable"),
+                "load_s": sa.get("load_time_sec"),
+                "https": sa.get("uses_https"),
+                "ssl": sa.get("ssl_valid"),
+                "booking": sa.get("has_online_booking"),
+                "chat": sa.get("has_chat_widget"),
+                "schema": sa.get("has_schema_org"),
+                "dm": sa.get("decision_maker_name"),
+                "leaks": (sa.get("detected_leaks") or [])[:4],
+                "copy": (sa.get("homepage_snippet") or "")[:500],
             },
-            "sender_portfolio": projects,
+            "sender_portfolio": compact_portfolio,
         }
 
-        prompt = (
-            "Analyze this audited prospect and return the structured JSON qualification, "
-            "portfolio match, and 3-step plain-text email sequence.\n\n"
-            f"DATA:\n{json.dumps(payload, indent=2, ensure_ascii=False)}"
-        )
+        prompt = f"Qualify & craft 3-step plain-text JSON:\n{json.dumps(payload, ensure_ascii=False)}"
 
         result = self._call_gemini_structured(prompt, system_instruction)
 
-        # Normalize tier based on thresholds
         if result.score >= self.whale_threshold:
             result.tier = "WHALE"
         elif result.score >= self.min_score:
@@ -360,23 +312,14 @@ STRICT EMAIL COPYWRITING RULES (NON-NEGOTIABLE — DESIGNED FOR 15-25% REPLIES):
         else:
             result.tier = "REJECT"
 
-        # Automated Anti-Spam Guardrail + Auto-Repair for qualified/whale emails
+        # Token-smart repair: ONLY burn a second call on critical Primary-Inbox violations (URL/brackets/spam)
         if result.tier != "REJECT":
             violations = validate_email_copy(result.email_1_subject, result.email_1_body, is_first_email=True)
-            violations += [
-                f"Followup 1: {v}"
-                for v in validate_email_copy("re: followup", result.followup_1_body, is_first_email=False)
-            ]
-            violations += [
-                f"Followup 2: {v}"
-                for v in validate_email_copy("re: followup", result.followup_2_body, is_first_email=False)
-            ]
-
-            if violations:
+            critical = [v for v in violations if any(k in v.lower() for k in ("url", "domain", "bracket", "spam", "caps"))]
+            if critical:
                 repair_prompt = (
-                    f"{prompt}\n\n"
-                    f"PREVIOUS DRAFT FAILED ANTI-SPAM GUARDRAIL. FIX EVERY VIOLATION BELOW AND RETURN CLEAN JSON:\n"
-                    + "\n".join(f"- {v}" for v in violations)
+                    f"{prompt}\n\nFIX THESE CRITICAL VIOLATIONS ONLY:\n"
+                    + "\n".join(f"- {v}" for v in critical)
                 )
                 result = self._call_gemini_structured(repair_prompt, system_instruction)
                 if result.score >= self.whale_threshold:
@@ -534,23 +477,10 @@ def run_audit_and_qualification(limit: Optional[int] = None, reaudit: bool = Fal
 
             if qual.tier == "WHALE":
                 stats["whales"] += 1
-                matched_proj = portfolio_projects.get(
-                    (qual.matched_portfolio_project or "").strip().lower(),
-                    engine.portfolio["projects"][0],
-                )
-                demo_path = generate_whale_demo_html(
-                    lead=lead,
-                    audit=audit,
-                    qualification=qual_dict,
-                    portfolio_project=matched_proj,
-                    builder_info=builder_info,
-                    gemini_demo_copy=qual.whale_demo_copy.model_dump() if qual.whale_demo_copy else None,
-                    api_key=engine.api_key,
-                    demo_model=engine.demo_model,
-                )
+                # ZERO-WASTE MODE: Demos & briefs are ONLY created once the prospect actually replies!
                 print(
                     f"   🐋 WHALE ({qual.score}/10 | {qual.estimated_deal_value}) | "
-                    f"Project: {qual.matched_portfolio_project} | Demo: {os.path.basename(demo_path)}",
+                    f"Project: {qual.matched_portfolio_project} | Subj: '{qual.email_1_subject}' (Demo deferred until reply)",
                     flush=True,
                 )
             elif qual.tier == "QUALIFIED":

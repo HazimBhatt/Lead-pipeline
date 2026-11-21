@@ -462,3 +462,173 @@ def generate_whale_demo_html(
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html_doc)
     return out_path
+
+
+def build_mockup_prompt(lead: Dict, audit: Dict, qualification: Dict) -> str:
+    """
+    Build a copy-paste-ready Master Redesign Prompt (0 API tokens!) tailored to the
+    exact replied client's industry art direction, real scraped services, and verified leaks.
+    Paste into any AI web UI (Gemini / Claude / Antigravity) at $0 API cost!
+    """
+    industry_label, art_direction = _detect_industry_art_direction(lead, audit)
+    sa = (audit or {}).get("site_audit") or {}
+    biz_name = lead.get("name") or "Client Business"
+    city = lead.get("city") or ""
+    address = lead.get("address") or city
+    phone = lead.get("phone") or "N/A"
+    website = lead.get("website") or "N/A"
+    rating = lead.get("rating") or 4.8
+    reviews = lead.get("reviews") or 0
+    dm_name = sa.get("decision_maker_name") or (qualification or {}).get("decision_maker_first_name") or "Not specified"
+    leaks = (qualification or {}).get("top_revenue_leaks") or sa.get("detected_leaks") or []
+    snippet = (sa.get("homepage_snippet") or "")[:1800]
+
+    leaks_block = "\n".join(f"- {lk}" for lk in leaks[:5]) or "- Slow mobile experience and missing instant online booking flow"
+
+    return f"""Build ONE complete, standalone, agency-grade ($10,000 studio quality) HTML5 + CSS + vanilla JS homepage redesign mockup for this REAL client who just replied to my outreach:
+
+CLIENT DETAILS (USE ONLY REAL FACTS — NEVER INVENT FAKE NAMES OR ADDRESSES):
+- Business Name: {biz_name}
+- Industry: {industry_label}
+- City / Address: {address}
+- Phone: {phone}
+- Current Website: {website}
+- Google Rating: {rating} stars ({reviews}+ verified reviews)
+- Decision Maker: {dm_name}
+
+VERIFIED LEAKS ON THEIR CURRENT SITE THAT THIS REDESIGN MUST FIX:
+{leaks_block}
+
+REAL HOMEPAGE COPY / SERVICES EXTRACTED FROM THEIR LIVE SITE:
+{snippet or "(Website was unreachable — design around their exact niche & city above.)"}
+
+MANDATORY ART DIRECTION (NO GENERIC DARK AI SLOP):
+{art_direction}
+
+REQUIREMENTS:
+1. Single self-contained `index.html` using Google Fonts (`<link>`) and clean responsive CSS + lightweight vanilla JS. No broken external `<img>` URLs.
+2. Include: refined top nav bar with phone & pill CTA, above-the-fold editorial hero with verified `{rating}★ ({reviews}+ reviews)` trust strip + interactive Priority Consultation / Instant Quote card, Signature Services grid extracted from their real copy, Authority/Process section, interactive booking confirmation modal, and clean footer.
+3. Make it look unmistakably like a $10k boutique studio build with generous whitespace and fluid typography."""
+
+
+def save_replied_client_brief(
+    lead: Dict,
+    reply_subject: str,
+    reply_body: str,
+    closing_draft_summary: str = "",
+    closing_draft_body: str = "",
+) -> str:
+    """
+    ONLY called once a prospect actually replies!
+    Saves ALL scraped/audited client info + their reply + a $0 copy-paste Master Redesign Prompt
+    into `demos/<company-slug>/client_brief.md` (zero API tokens burned!).
+    """
+    biz_name = lead.get("name") or lead.get("email") or "replied-client"
+    slug = _slugify(biz_name)
+    client_dir = os.path.join(DEMOS_DIR, slug)
+    os.makedirs(client_dir, exist_ok=True)
+
+    audit = lead.get("audit") or {}
+    sa = audit.get("site_audit") or {}
+    mx = audit.get("mx") or {}
+    qual = lead.get("qualification") or {}
+    leaks = qual.get("top_revenue_leaks") or sa.get("detected_leaks") or []
+    phone = lead.get("phone") or "N/A"
+    digits = re.sub(r"\D+", "", phone)
+    wa_link = f"https://wa.me/{digits}" if len(digits) >= 9 else "N/A"
+    mockup_prompt = build_mockup_prompt(lead, audit, qual)
+
+    leaks_md = "\n".join(f"- {lk}" for lk in leaks) or "- None recorded"
+
+    brief_md = f"""# Replied Client Dossier — {biz_name}
+
+## 1. Contact & Business Profile
+- **Business Name:** {biz_name}
+- **Decision Maker:** {sa.get('decision_maker_name') or qual.get('decision_maker_first_name') or 'N/A'} ({sa.get('decision_maker_role') or 'Owner/Lead'})
+- **Email:** `{lead.get('email') or 'N/A'}` (MX: `{mx.get('reason') or 'Verified'}`)
+- **Phone / WhatsApp:** `{phone}` | {wa_link}
+- **Website:** {lead.get('website') or 'N/A'}
+- **City / Address:** {lead.get('address') or lead.get('city') or 'N/A'}
+- **Google Rating:** {lead.get('rating') or 'N/A'}★ ({lead.get('reviews') or 0} reviews)
+- **Google Maps:** {lead.get('maps_link') or 'N/A'}
+- **AI Score & Deal Est:** `{qual.get('score') or 'N/A'}/10` ({qual.get('estimated_deal_value') or 'High-Ticket'})
+- **Recommended Angle:** {qual.get('recommended_service_angle') or 'N/A'}
+- **Matched Portfolio Project:** {qual.get('matched_portfolio_project') or 'N/A'}
+
+---
+
+## 2. Live Website Audit & Verified Leaks
+- **Reachable:** `{sa.get('reachable')}` | **Load Time:** `{sa.get('load_time_sec')}s` | **HTTPS/SSL:** `{sa.get('uses_https')}/{sa.get('ssl_valid')}`
+- **Tech Stack:** `{', '.join(sa.get('tech_stack') or ['Unknown'])}`
+- **Online Booking:** `{sa.get('has_online_booking')}` | **Lead Form:** `{sa.get('has_lead_form')}` | **Chat Widget:** `{sa.get('has_chat_widget')}` | **Schema.org:** `{sa.get('has_schema_org')}`
+- **Verified Leaks:**
+{leaks_md}
+
+---
+
+## 3. Incoming Client Reply
+**Subject:** {reply_subject}
+
+```text
+{(reply_body or '').strip()}
+```
+
+---
+
+## 4. Recommended Closing Reply
+> {closing_draft_summary}
+
+```text
+{(closing_draft_body or '').strip()}
+```
+
+---
+
+## 5. Ready-to-Paste Master Redesign Prompt ($0 Cost — Paste Into Any AI UI!)
+Copy everything inside the box below into Gemini / Claude / Antigravity to generate their custom luxury `index.html` redesign on demand:
+
+```text
+{mockup_prompt}
+```
+
+*(Or auto-render it directly via API for just this 1 client with: `venv\\Scripts\\python.exe analyzer\\demo_generator.py --email "{lead.get('email') or ''}"`)*
+"""
+
+    brief_path = os.path.join(client_dir, "client_brief.md")
+    with open(brief_path, "w", encoding="utf-8") as f:
+        f.write(brief_md)
+    return brief_path
+
+
+if __name__ == "__main__":
+    import argparse
+    import json
+
+    parser = argparse.ArgumentParser(description="On-demand single-client demo generator (run ONLY when a client replies!)")
+    parser.add_argument("--email", required=True, help="Email address of the replied client from qualified_leads.json")
+    args = parser.parse_args()
+
+    q_path = os.path.join(ROOT_DIR, "qualified_leads.json")
+    p_path = os.path.join(ROOT_DIR, "portfolio.json")
+    leads = json.load(open(q_path, encoding="utf-8")) if os.path.exists(q_path) else []
+    portfolio = json.load(open(p_path, encoding="utf-8")) if os.path.exists(p_path) else {"builder": {}, "projects": [{}]}
+
+    target_em = args.email.strip().lower()
+    lead = next((l for l in leads if (l.get("email") or "").strip().lower() == target_em), None)
+    if not lead:
+        print(f"❌ Lead '{target_em}' not found in qualified_leads.json")
+        sys.exit(1)
+
+    proj_map = {p.get("name", "").lower(): p for p in portfolio.get("projects", [])}
+    matched_name = ((lead.get("qualification") or {}).get("matched_portfolio_project") or "").lower()
+    proj = proj_map.get(matched_name, (portfolio.get("projects") or [{}])[0])
+
+    out = generate_whale_demo_html(
+        lead=lead,
+        audit=lead.get("audit") or {},
+        qualification=lead.get("qualification") or {},
+        portfolio_project=proj,
+        builder_info=portfolio.get("builder") or {},
+    )
+    print(f"✅ On-demand redesign generated: {out}")
+

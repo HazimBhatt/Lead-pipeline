@@ -38,8 +38,8 @@ FOLLOWUP_2_DAYS = 7
 # Gemini AI Configuration (get key from https://aistudio.google.com/apikey)
 # Paste your key here OR set GEMINI_API_KEY as an environment variable
 GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
-GEMINI_MODEL = "gemini-3.8-flash"
-DEMO_MODEL = "gemini-4-hydrogen"   # Used for agency-grade Whale HTML redesigns & hot-reply closing drafts
+GEMINI_MODEL = "gemini-3.5-flash-lite"   # Ultra-low-cost & fast for bulk lead scoring + 50-word emails
+DEMO_MODEL = "gemini-4-hydrogen"         # Used ONLY when a client actually replies (near-$0 cost!)
 
 # Lead Qualification Thresholds (1-10 scale)
 MIN_LEAD_SCORE = 7           # Leads below 7 are auto-rejected
