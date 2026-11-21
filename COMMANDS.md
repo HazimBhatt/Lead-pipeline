@@ -102,8 +102,8 @@ venv\Scripts\python.exe outreach/reply_notifier.py --test-alert
 
 ---
 
-## 8. Hands-Free Daily Autopilot & Windows Scheduler (12:10 PM + Offline Catch-Up)
-Runs automatically every day at **12:10 PM** (and catches up immediately when your PC turns back on / reconnects to Wi-Fi) + checks for hot replies every **30 minutes** silently in the background:
+## 8. Hands-Free Daily Autopilot & Windows Scheduler (3:00 PM + Offline Catch-Up)
+Runs automatically every day at **3:00 PM** (and catches up immediately when your PC turns back on / reconnects to Wi-Fi) + checks for hot replies every **30 minutes** silently in the background:
 ```powershell
 # Install / refresh both Windows Scheduled Tasks
 powershell -ExecutionPolicy Bypass -File .\setup_scheduler.ps1

@@ -50,6 +50,7 @@ BAD_EMAIL_PREFIXES = {
     "abuse", "postmaster", "mailer-daemon", "webmaster", "hostmaster",
     "cgiadmin", "unsubscribe", "bounce", "spam", "jobs", "careers", "hr",
     "recruitment", "billing", "accounts", "invoice", "invoices",
+    "server", "root", "daemon",
 }
 
 BOOKING_SIGNALS = [
@@ -206,6 +207,7 @@ UI_TRAILING_WORDS = {
     "office", "clinic", "dental", "practice", "spa", "medspa", "services",
     "reviews", "testimonials", "blog", "faq", "hours", "location", "locations",
     "is", "has", "was", "and", "at", "in", "of", "for", "with",
+    "payments", "payment", "experience", "dr", "dds", "dmd", "md", "pc", "llc",
 }
 
 

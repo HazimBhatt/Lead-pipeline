@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS
   Registers or manages the two Windows Task Scheduler jobs for LeadPipeline:
-    1) LeadPipeline-DailyAutopilot  -> Daily at 12:10 PM (+ automatic catch-up when PC boots/comes online!)
+    1) LeadPipeline-DailyAutopilot  -> Daily at 3:00 PM (+ automatic catch-up when PC boots/comes online!)
     2) LeadPipeline-ReplyWatcher    -> Every 30 minutes (instant hot-reply alerts + AI closing drafts to your ALERT_EMAIL)
 
 .EXAMPLE
@@ -66,14 +66,14 @@ $DailyAction = New-ScheduledTaskAction `
     -Argument "`"$AutopilotScript`"" `
     -WorkingDirectory $RepoDir
 
-$DailyTrigger = New-ScheduledTaskTrigger -Daily -At "12:10PM"
+$DailyTrigger = New-ScheduledTaskTrigger -Daily -At "03:00PM"
 
 $DailySettings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
     -RunOnlyIfNetworkAvailable `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
-    -ExecutionTimeLimit (New-TimeSpan -Hours 3) `
+    -ExecutionTimeLimit (New-TimeSpan -Hours 5) `
     -MultipleInstances IgnoreNew `
     -RestartCount 2 `
     -RestartInterval (New-TimeSpan -Minutes 15)
@@ -114,6 +114,6 @@ Register-ScheduledTask `
     -Force | Out-Null
 
 Write-Host "`n✅ SUCCESS! Both Windows Scheduled Tasks installed:" -ForegroundColor Green
-Write-Host "  1. $DailyTaskName -> Daily 12:10 PM (+ automatic catch-up when PC boots/reconnects)"
+Write-Host "  1. $DailyTaskName -> Daily 3:00 PM (+ automatic catch-up when PC boots/reconnects)"
 Write-Host "  2. $ReplyTaskName -> Every 30 minutes (instant alerts + AI closing drafts to ALERT_EMAIL)"
 Write-Host "`nCheck status anytime with: .\setup_scheduler.ps1 -Status" -ForegroundColor Cyan

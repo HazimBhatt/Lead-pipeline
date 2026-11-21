@@ -24,6 +24,9 @@ DEMO_MODEL_FALLBACK_CHAIN = [
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
 ]
+# Sticky session cache: once a healthy fast model succeeds, reuse it for the rest of the batch
+# so transient 503/504 spikes on one model never stall every lead!
+_ACTIVE_DEMO_MODEL: Optional[str] = None
 
 
 def _slugify(name: str) -> str:
@@ -364,8 +367,10 @@ DESIGN & ENGINEERING REQUIREMENTS:
 
 Output ONLY the raw complete HTML document starting with `<!DOCTYPE html>` and ending with `</html>`."""
 
-    client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=90_000))
-    models_to_try = [preferred_model] + [m for m in DEMO_MODEL_FALLBACK_CHAIN if m != preferred_model]
+    global _ACTIVE_DEMO_MODEL
+    client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=40_000))
+    start_model = _ACTIVE_DEMO_MODEL or preferred_model
+    models_to_try = [start_model] + [m for m in DEMO_MODEL_FALLBACK_CHAIN if m != start_model]
 
     for model_name in models_to_try:
         try:
@@ -377,6 +382,7 @@ Output ONLY the raw complete HTML document starting with `<!DOCTYPE html>` and e
             html_out = _extract_html_block(resp.text or "")
             issues = validate_demo_html(html_out, biz_name)
             if not issues:
+                _ACTIVE_DEMO_MODEL = model_name
                 # Inject subtle collapsible Audit Notes floating pill right before </body>
                 drawer = _build_audit_drawer_snippet(
                     biz_name,
@@ -390,9 +396,10 @@ Output ONLY the raw complete HTML document starting with `<!DOCTYPE html>` and e
                 return html_out
         except Exception as e:
             err_str = str(e).lower()
-            if any(k in err_str for k in ("404", "not found", "not supported", "invalid argument")):
+            # Fail over immediately on 404/503/504/deadline/high-demand spikes
+            if any(k in err_str for k in ("404", "503", "504", "not found", "not supported", "invalid argument", "unavailable", "deadline", "timeout", "high demand", "overloaded")):
                 continue
-            time.sleep(2)
+            time.sleep(1)
 
     return None
 

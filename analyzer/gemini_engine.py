@@ -209,7 +209,7 @@ class GeminiSniperEngine:
             )
         self.client = genai.Client(
             api_key=self.api_key,
-            http_options=types.HttpOptions(timeout=60_000),
+            http_options=types.HttpOptions(timeout=35_000),
         )
         self.preferred_model = preferred_model or (getattr(cfg, "GEMINI_MODEL", "gemini-3.8-flash") if cfg else "gemini-3.8-flash")
         self.demo_model = getattr(cfg, "DEMO_MODEL", "gemini-4-hydrogen") if cfg else "gemini-4-hydrogen"
@@ -245,7 +245,7 @@ class GeminiSniperEngine:
         last_err = None
 
         for model_name in models_to_try:
-            for attempt in range(3):
+            for attempt in range(2):
                 try:
                     response = self.client.models.generate_content(
                         model=model_name,
@@ -264,12 +264,10 @@ class GeminiSniperEngine:
                 except Exception as e:
                     last_err = e
                     err_str = str(e).lower()
-                    # If model not found / unsupported, immediately try next model in fallback chain
-                    if any(k in err_str for k in ("404", "not found", "not supported", "invalid argument")):
+                    # Fail over immediately to next healthy model on 404/503/504/high-demand/timeout
+                    if any(k in err_str for k in ("404", "503", "504", "not found", "not supported", "invalid argument", "unavailable", "deadline", "timeout", "high demand", "overloaded")):
                         break
-                    # Rate limit / transient server error -> exponential backoff
-                    wait_s = 2 ** (attempt + 1)
-                    time.sleep(wait_s)
+                    time.sleep(2 ** (attempt + 1))
 
         raise RuntimeError(f"Gemini API failed across all fallback models: {last_err}")
 

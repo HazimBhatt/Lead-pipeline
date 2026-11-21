@@ -32,6 +32,7 @@ IGNORED_PREFIXES = {
     "user", "username", "yourname", "test", "demo", "sample", "example", "firstname", "name",
     "admin123", "placeholder", "noreply", "no-reply", "donotreply", "privacy", "gdpr",
     "careers", "jobs", "hr", "billing", "invoices", "webmaster", "postmaster", "abuse",
+    "server", "hostmaster", "root", "mailer-daemon",
 }
 
 # Decision-maker role prefixes (preferred over generic info@)
@@ -75,7 +76,11 @@ def clean_email(raw_email: str) -> Optional[str]:
         return None
 
     user, domain = email.split("@", 1)
-    
+
+    # Strip accidental URL-encoded leading space artifact (e.g. %20info@ -> 20info@)
+    if user.startswith("20") and user[2:] in PRIORITY_PREFIXES:
+        user = user[2:]
+
     # Strip trailing punctuation
     user = user.strip(".,;:!'\"")
     domain = domain.strip(".,;:!'\"")
