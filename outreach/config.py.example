@@ -14,9 +14,40 @@ FROM_NAME = "Your Name"
 # BCC: Track all sent emails by CC'ing yourself
 BCC = "hello@yourdomain.com"
 
-# Rate limiting (seconds between consecutive sends)
+# Rate limiting (randomized human-like seconds between sends for Primary Inbox safety)
 SEND_DELAY = 30
+MIN_SEND_DELAY = 60
+MAX_SEND_DELAY = 150
 
-# Optional run cap (uncomment to limit emails per run; leave commented to process all uncontacted leads)
-# MAX_EMAILS_PER_RUN = 50
+# Gmail Primary Inbox Safety Cap (30/day safe on healthy aged Gmail with 60-150s delays)
+DAILY_SEND_LIMIT = 30
+
+# Minimum ready-to-send Tier-1 leads before daily autopilot auto-scrapes fresh pairs
+MIN_READY_POOL = 35
+
+# Instant Hot-Reply Alert Destination (receives prospect reply + AI-drafted closing response)
+ALERT_EMAIL = "your_personal_inbox@gmail.com"
+
+# Optional run cap (uncomment to limit emails per run)
+# MAX_EMAILS_PER_RUN = 30
+
+# Automated Follow-Up Schedule (days after previous email in same thread)
+FOLLOWUP_1_DAYS = 3
+FOLLOWUP_2_DAYS = 7
+
+# Gemini AI Configuration (get key from https://aistudio.google.com/apikey)
+# Paste your key here OR set GEMINI_API_KEY as an environment variable
+GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
+GEMINI_MODEL = "gemini-3.8-flash"
+DEMO_MODEL = "gemini-4-hydrogen"   # Used for agency-grade Whale HTML redesigns & hot-reply closing drafts
+
+# Lead Qualification Thresholds (1-10 scale)
+MIN_LEAD_SCORE = 7           # Leads below 7 are auto-rejected
+WHALE_SCORE_THRESHOLD = 9    # 9-10/10 Whale leads get an auto-generated custom HTML demo
+
+# Reply Checker Settings (IMAP)
+IMAP_HOST = "imap.gmail.com"
+IMAP_USER = SMTP_USER
+IMAP_PASSWORD = SMTP_PASSWORD
+CHECK_DAYS = 14
 

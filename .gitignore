@@ -18,9 +18,15 @@ __pycache__/
 venv/
 *.egg-info/
 
-# Output
+# Output & AI Pipeline State
 leads.json
+qualified_leads.json
+outreach_state.json
+notified_replies.json
+scraper/scrape_cursor.json
 pitched.json
+demos/
+logs/
 *.log
 
 # IDE

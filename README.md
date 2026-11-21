@@ -1,238 +1,84 @@
-# LeadPipeline 🚀
+# LeadPipeline 🚀 — Gemini AI Top-1% Client Acquisition Engine
 
-**Free, open-source lead generation and outreach automation. Scrape → Enrich → Pitch → Close.**
+**Local, AI-powered high-ticket client acquisition. Scrape High-LTV Leads → Audit Live Websites → Score & Personalize with Gemini → Generate Custom Whale Demos → Send Gmail-Primary-Safe Threaded Outreach.**
 
-LeadPipeline is a complete outbound sales system that runs **100% locally on your machine with $0 subscription costs**:
-- 📍 **Scrapes Google Maps** locally using Playwright (no paid cloud scrapers or Apify required).
-- ✉️ **Auto-Discovers Emails** using a multi-stage engine (homepage scan + contact pages + search fallback).
-- 📬 **Sends Personalized Pitches** over SMTP with BCC tracking and duplicate protection.
-- 💬 **Monitors Inbound Replies** and delivery bounces via IMAP.
-- 📊 **Syncs to Google Sheets CRM** (optional, zero database required).
-
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-22d3ee?style=flat-square&labelColor=03050a)](https://www.python.org/)
-[![Built for](https://img.shields.io/badge/Cost-%240%20Forever-success?style=flat-square&labelColor=03050a)]()
-
+LeadPipeline runs locally with **zero monthly SaaS subscriptions**:
+- 📍 **High-LTV Google Maps Scraper** (`scraper/local_scraper.py`) — Targets high-budget niches locally via Playwright (zero Apify fees).
+- 🔍 **Live Website & Decision-Maker Auditor** (`analyzer/site_auditor.py`) — Measures real speed, SSL, mobile readiness, online booking leaks, Schema/SEO gaps, verifies DNS MX records (near-0% bounce rate), and extracts founder/doctor names from `/about` & `/team`.
+- 🧠 **Gemini 3.8 Flash Sniper Qualifier & Copywriter** (`analyzer/gemini_engine.py`) — Scores every lead `1–10`, auto-rejects low-budget/trash leads (`<7/10`), dynamically matches your best shipped project from `portfolio.json`, and writes a spam-proof 3-step plain-text sequence enforced by an automated anti-spam guardrail.
+- 🐋 **Bespoke Whale Demo Generator** (`analyzer/demo_generator.py`) — Automatically creates a custom standalone 1-page Interactive Conversion Audit & Redesigned Hero Concept (`demos/<company>.html`) for every `9–10/10` Whale lead.
+- 📬 **Gmail-Primary-Safe Threaded Outreach** (`outreach/pitch_sender.py`) — Pure plain-text emails, randomized human pacing (`60–150s`), safe daily caps (`25/day` default on `@gmail.com`), true `In-Reply-To` email threading for Day-3 & Day-7 follow-ups, and **automatic IMAP reply/bounce stop** (`outreach/reply_checker.py`).
 
 ---
 
-## Complete Setup & Walkthrough (From Scratch)
+## Complete Setup (From Scratch)
 
-Follow these steps to set up and run the entire pipeline on your computer.
-
-### Step 1: Clone the Repository & Set Up Virtual Environment
-
-Open your terminal (PowerShell on Windows, or bash/zsh on macOS/Linux):
-
-```bash
-# Clone repository
+### 1. Clone & Create Virtual Environment
+```powershell
 git clone https://github.com/HazimBhatt/Lead-pipeline.git
 cd lead-pipeline
-```
-
-Create and activate a virtual environment:
-
-**Windows (PowerShell):**
-```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
-*(If you see an execution policy error on PowerShell, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` and re-run activate).*
 
-**macOS / Linux:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
----
-
-### Step 2: Install Dependencies & Chromium Browser
-
-Install all Python dependencies and download the local Chromium browser engine used by Playwright:
-
-```bash
-pip install -r requirements.txt
+### 2. Install Dependencies
+```powershell
+python -m pip install -r requirements.txt
 playwright install chromium
 ```
 
----
-
-### Step 3: Configure Target Leads (`scraper/config.py`)
-
-Copy the example configuration file:
-
-**Windows:**
+### 3. Configure High-LTV Targets (`scraper/config.py`)
 ```powershell
 copy scraper\config.py.example scraper\config.py
 ```
-**macOS / Linux:**
-```bash
-cp scraper/config.py.example scraper/config.py
-```
+Pre-configured for high-ticket English-speaking markets (`Dubai`, `Austin`, `Miami`, `Scottsdale`, `London`, `Sydney`, `Toronto`) and High-LTV industries (`cosmetic dentist`, `dental implants clinic`, `medspa`, `luxury real estate agency`, `roofing contractor`, `solar installation company`, `immigration law firm`, `boutique hotel`).
 
-Open `scraper/config.py` in your code editor and customize your target search:
-
-```python
-# What industries/businesses to find
-SEARCH_QUERIES = [
-    "dental clinics",
-    "real estate agents",
-    "fine dining restaurants"
-]
-
-# Cities or areas to target
-TARGET_CITIES = [
-    "Kuala Lumpur",
-    "Singapore"
-]
-
-# Number of results per search (e.g. 20 results per city)
-MAX_RESULTS = 20
-
-# Set False to watch the browser open on your screen; True to run invisibly
-HEADLESS = False
-
-# Automatically crawl business websites & web snippets to discover emails
-ENRICH_EMAILS = True
-EMAIL_TIMEOUT = 6
-MAX_EMAIL_PAGES = 3
-```
-
----
-
-### Step 4: Configure Email Outreach (`outreach/config.py`)
-
-Copy the outreach configuration file:
-
-**Windows:**
+### 4. Configure Gemini & Gmail SMTP/IMAP (`outreach/config.py`)
 ```powershell
 copy outreach\config.py.example outreach\config.py
 ```
-**macOS / Linux:**
-```bash
-cp outreach/config.py.example outreach/config.py
+Add your:
+- **Gmail App Password** (from Google Account Security → 2-Step Verification → App passwords)
+- **`GEMINI_API_KEY`** (from [Google AI Studio](https://aistudio.google.com/apikey)) — either in `outreach/config.py` (gitignored) or as an environment variable `$env:GEMINI_API_KEY="your_key"`.
+
+### 5. Customize Your Portfolio Brain (`portfolio.json`)
+```powershell
+copy portfolio.json.example portfolio.json
 ```
-
-Open `outreach/config.py` and enter your SMTP credentials. 
-
-> [!TIP]
-> **Using Gmail?**
-> You need a Gmail **App Password** (not your regular Gmail password):
-> 1. Go to [Google Account Security](https://myaccount.google.com/security).
-> 2. Ensure **2-Step Verification** is enabled.
-> 3. Search for **App passwords**, create one (e.g., name it `LeadPipeline`), and copy the 16-character password.
-
-```python
-# SMTP Server Settings (Gmail example)
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 465                      # 465 for SSL, 587 for STARTTLS
-SMTP_USER = "your_email@gmail.com"
-SMTP_PASSWORD = "xxxx xxxx xxxx xxxx"  # 16-character App Password
-
-# Sender Details
-FROM_EMAIL = "your_email@gmail.com"
-FROM_NAME = "Your Name"
-
-# BCC: Automatically sends a copy to yourself to track sent emails
-BCC = "your_email@gmail.com"
-
-# Safe sending delay (minimum 45-60 seconds recommended to avoid spam flags)
-SEND_DELAY = 45
-
-# Reply Checker Settings (IMAP)
-IMAP_HOST = "imap.gmail.com"
-IMAP_USER = SMTP_USER
-IMAP_PASSWORD = SMTP_PASSWORD
-CHECK_DAYS = 3
-```
+Edit `portfolio.json` with your real shipped projects, traction, and positioning. Gemini automatically matches the single most relevant project to each prospect's exact problem. (`portfolio.json` is gitignored so your personal profile stays local.)
 
 ---
 
-## Running the Pipeline
-
-Now that your setup is complete, you can run each stage of the funnel:
-
-### Phase 1: Scrape Leads & Auto-Discover Emails
-
-Run the local browser scraper:
-
-```bash
-python scraper/local_scraper.py
-```
-
-**What it does:**
-1. Opens Chromium directly on your desktop.
-2. Searches Google Maps for each query in each city.
-3. Clicks each business and extracts name, phone, category, rating, reviews, address, and website.
-4. Crawls the business website, contact pages, and search snippets to discover their direct contact email.
-5. Deduplicates leads and saves everything cleanly into `leads.json`.
-
----
-
-### Phase 2: Send Outbound Email Pitches
-
-To pitch the businesses saved in `leads.json`:
-
-```bash
-python outreach/pitch_sender.py
-```
-
-**Key Features:**
-- **Preview Mode:** Set `PREVIEW_ONLY = True` on line 20 of `outreach/pitch_sender.py` to inspect the generated pitches in your terminal without sending anything. Set to `False` when ready to send live.
-- **Volume Control:** Adjust `MAX_EMAILS_PER_RUN = 5` (line 23 of `outreach/pitch_sender.py`) to send in safe, controlled daily batches.
-- **Duplicate Prevention:** Sent leads are automatically logged in `pitched.json`—the script will **never** email the same business twice.
-
----
-
-### Phase 3: Monitor Replies & Warm Leads
-
-To scan your inbox for replies, interested clients, or delivery bounces from the last 3 days:
-
-```bash
-python outreach/reply_checker.py
-```
-
----
-
-### Phase 4 (Optional): Google Sheets CRM
-
-To sync your scraped leads into a free Google Sheets spreadsheet:
-
-1. Place your Google Cloud service account JSON file at `sheets/credentials.json`.
-2. Enter your `SHEET_ID` in `sheets/google_sheets.py`.
-3. Run:
-   ```bash
-   python sheets/google_sheets.py
-   ```
-
----
-
-## Quick Reference Commands
-
-Whenever you want to run the pipeline, activate your environment and execute:
+## Daily Top-1% Workflow (`run_pipeline.py`)
 
 ```powershell
-# 1. Activate environment
-.\venv\Scripts\Activate.ps1
+# 1. Check live pipeline dashboard & Whale leads
+python run_pipeline.py --status
 
-# 2. Scrape leads + emails ($0 local browser)
-python scraper/local_scraper.py
+# 2. Scrape fresh High-LTV leads from Google Maps
+python run_pipeline.py --scrape
 
-# 3. Send personalized email pitches
-python outreach/pitch_sender.py
+# 3. Audit live sites + verify MX + score with Gemini + generate Whale HTML demos
+python run_pipeline.py --audit --limit 30
 
-# 4. Check for client replies
-python outreach/reply_checker.py
+# 4. Preview generated emails safely (sends 0 emails)
+python run_pipeline.py --send --preview
+
+# 5. Interactive approval mode (eyeball & approve each Whale before sending)
+python run_pipeline.py --review
+
+# 6. Automated Gmail-Primary-safe sending (Email 1 + due Day 3/7 threaded follow-ups)
+python run_pipeline.py --send
+
+# Or run the full daily loop end-to-end:
+python run_pipeline.py --all --limit 25
 ```
+
+Press **`Ctrl+C`** at any moment to pause cleanly — every scraped lead, Gemini score, generated Whale demo, and sent email is saved immediately on disk with zero data loss and zero duplicate sends.
 
 ---
 
-## Security & Git Safety
-
-All sensitive credentials and data are pre-configured in `.gitignore`:
-- `config.py` (your passwords and targeting)
-- `leads.json` (your scraped contacts)
-- `pitched.json` (your outreach history)
-- `credentials.json` (service account keys)
-
-These files will **never** be committed or leaked to your Git repository.
+## Gmail Primary Inbox Survival Rules (Built In)
+- **Zero links & zero HTML in Email #1** — Enforced automatically by the anti-spam guardrail. Mention your product brand name naturally and only send your custom Whale demo (`demos/<company>.html`) + live links once they reply *"Sure, send it over."*
+- **MX Verification before every send** — Keeps bounce rate near 0%.
+- **20–25 high-intent emails/day max on `@gmail.com`** — Randomized 60–150s delays mimic real human typing. Once you close your first $2k+ client, attach a dedicated outreach domain on Google Workspace/Zoho Mail Lite and scale `DAILY_SEND_LIMIT` up safely.

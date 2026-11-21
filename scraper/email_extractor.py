@@ -15,32 +15,47 @@ IGNORED_EXTENSIONS = {
     ".js", ".css", ".woff", ".woff2", ".ttf", ".eot", ".mp4", ".mp3", ".pdf", ".zip"
 }
 
-# Domains and words to ignore (frameworks, analytics, sample emails, CDNs)
+# Domains and words to ignore (frameworks, analytics, directories, sample emails, CDNs)
 IGNORED_DOMAINS = {
     "sentry.io", "wixpress.com", "wordpress.org", "cloudflare.com", "schema.org",
     "googleapis.com", "github.com", "gitlab.com", "medium.com", "gravatar.com",
     "example.com", "domain.com", "email.com", "sample.com", "yoursite.com",
-    "sitename.com", "mycompany.com", "myshopify.com", "w3.org"
+    "sitename.com", "mycompany.com", "myshopify.com", "w3.org",
+    "dandb.com", "bbb.org", "yelp.com", "yellowpages.com", "mapquest.com",
+    "facebook.com", "instagram.com", "wix.com", "godaddy.com", "squarespace.com",
+    "mailchimp.com", "hubspot.com", "mysite.com", "mystore.com", "tznvy.pbz",
+    "yourhostingaccount.com", "site123-gal-editor-b.com",
 }
 
-# Prefixes often used for dummy/placeholder emails
+# Prefixes often used for dummy/placeholder/non-outreach emails
 IGNORED_PREFIXES = {
     "user", "username", "yourname", "test", "demo", "sample", "example", "firstname", "name",
-    "admin123", "placeholder"
+    "admin123", "placeholder", "noreply", "no-reply", "donotreply", "privacy", "gdpr",
+    "careers", "jobs", "hr", "billing", "invoices", "webmaster", "postmaster", "abuse",
 }
 
-# High-priority role prefixes for business outreach
-PRIORITY_PREFIXES = {
-    "info", "contact", "hello", "hi", "enquiry", "enquiries", "sales", "support",
-    "help", "booking", "reservations", "reservation", "office", "admin", "marketing",
-    "general", "service", "team"
+# Decision-maker role prefixes (preferred over generic info@)
+DECISION_MAKER_PREFIXES = {
+    "founder", "owner", "ceo", "director", "partner", "managing", "president",
+    "dr", "doctor", "principal", "broker", "exec",
 }
+
+# Generic role prefixes (used ONLY as fallback when no personal/founder email exists)
+GENERIC_ROLE_PREFIXES = {
+    "info", "contact", "hello", "hi", "enquiry", "enquiries", "sales", "support",
+    "help", "booking", "bookings", "reservations", "reservation", "office", "admin",
+    "marketing", "general", "service", "services", "team", "care", "concierge",
+    "frontdesk", "reception", "clientcare", "mail",
+}
+
+PRIORITY_PREFIXES = DECISION_MAKER_PREFIXES | GENERIC_ROLE_PREFIXES
 
 EMAIL_REGEX = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
 CONTACT_KEYWORDS = [
-    "contact", "contact-us", "contact_us", "contactus", "about", "about-us",
-    "reach-us", "reach_us", "get-in-touch", "reservations", "enquiry", "enquiries"
+    "team", "our-team", "leadership", "doctors", "founders", "attorneys", "staff",
+    "about", "about-us", "contact", "contact-us", "contact_us", "contactus",
+    "reach-us", "reach_us", "get-in-touch", "reservations", "enquiry", "enquiries",
 ]
 
 
@@ -163,7 +178,8 @@ def find_contact_links(base_url: str, html: str, max_links: int = 3) -> List[str
 
 def score_email(email: str, base_domain: str) -> int:
     """
-    Score email to prioritize domain-matching addresses and primary business inboxes.
+    Score email to strongly prioritize DIRECT decision-maker / personal / founder emails
+    over generic info@ / care@ / reception@ addresses.
     """
     user, domain = email.split("@", 1)
     clean_base_domain = base_domain.lower().replace("www.", "")
@@ -173,17 +189,21 @@ def score_email(email: str, base_domain: str) -> int:
     if domain == clean_base_domain or domain.endswith("." + clean_base_domain):
         score += 50
 
-    # 2. Priority role prefix bonus (+30 points)
-    if user in PRIORITY_PREFIXES:
-        score += 30
-    elif any(user.startswith(pref) for pref in PRIORITY_PREFIXES):
-        score += 20
-
-    # 3. Known business email provider penalty/bonus
-    if domain in {"gmail.com", "yahoo.com", "hotmail.com", "outlook.com"}:
-        score += 5  # Small local businesses often use Gmail
+    # 2. Strongly prioritize direct personal / founder / doctor emails over generic role boxes
+    if user in DECISION_MAKER_PREFIXES or user.startswith(("dr.", "dr_", "dr")):
+        score += 55
+    elif user not in GENERIC_ROLE_PREFIXES and not any(user.startswith(g + ".") for g in GENERIC_ROLE_PREFIXES):
+        # Looks like a real person's email (e.g., alice@, sarah.smith@, jclark@)
+        score += 45
     else:
-        score += 15  # Custom domains preferred for professional outreach
+        # Generic role address (info@, care@, office@) -> fallback only
+        score += 10
+
+    # 3. Domain quality bonus
+    if domain in {"gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com", "live.com"}:
+        score += 8   # Small business owners often check their personal Gmail/Yahoo directly
+    else:
+        score += 15  # Custom company domain preferred
 
     return score
 

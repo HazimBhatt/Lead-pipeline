@@ -1,31 +1,59 @@
+# Scraper Configuration — Copy this file to config.py
+# STRICT TIER-1 HIGH-PAYING MARKETS ONLY (USA, UK, Australia, Canada, Switzerland)
 
-
-# What businesses to search for
+# High-LTV niches where 1 new client = $5k-$50k+ in revenue
 SEARCH_QUERIES = [
-    "restaurants",
-    "cafes",
-    "hotels",
-    "real estate agents",
-    "dental clinics"
+    "cosmetic dentist",
+    "dental implants clinic",
+    "medspa",
+    "plastic surgery clinic",
+    "luxury real estate brokerage",
+    "custom home builder",
+    "roofing contractor",
+    "solar installation company",
+    "personal injury law firm",
+    "immigration law firm",
+    "estate planning attorney",
+    "luxury pool builder",
+    "HVAC contractor",
 ]
 
-# Cities to target
+# Strictly Tier-1 affluent cities (USA, UK, Australia, Canada, Switzerland)
 TARGET_CITIES = [
-    "Kuala Lumpur",
-    "Singapore",
-    "Jakarta"
+    "Scottsdale AZ",
+    "Austin TX",
+    "Miami FL",
+    "Beverly Hills CA",
+    "Newport Beach CA",
+    "Boca Raton FL",
+    "Dallas TX",
+    "Denver CO",
+    "Seattle WA",
+    "Boston MA",
+    "Nashville TN",
+    "San Diego CA",
+    "Charlotte NC",
+    "Atlanta GA",
+    "London UK",
+    "Manchester UK",
+    "Edinburgh UK",
+    "Sydney Australia",
+    "Melbourne Australia",
+    "Brisbane Australia",
+    "Toronto Canada",
+    "Vancouver Canada",
+    "Calgary Canada",
+    "Zurich Switzerland",
+    "Geneva Switzerland",
 ]
 
 # Max results per search
 MAX_RESULTS = 20
 
 # Local Browser Settings (Playwright)
-# Set HEADLESS = False to watch the browser open and scrape on your screen
 HEADLESS = False
 
 # Email Enrichment Settings
-# Automatically visits business websites to discover direct contact emails
 ENRICH_EMAILS = True
 EMAIL_TIMEOUT = 6
 MAX_EMAIL_PAGES = 3
-
